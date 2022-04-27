@@ -1,0 +1,194 @@
+name: Backup Intune
+
+# Controls when the action will run. 
+on:
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+    branches:
+        - main
+  push:
+    paths:
+      - '.github/workflows/intune-backup.yml'
+    tags-ignore:
+      - '*'
+  schedule:
+    # Run the Intune configuration backup every day at 1am
+    - cron:  '0 1 * * *'
+
+# Add variables to the repo as secrets
+env:
+  REPO_DIR: "$GITHUB_WORKSPACE/prod-backup"
+  TENANT_NAME: ${{ secrets.TENANT_NAME }}
+  CLIENT_ID: ${{ secrets.CLIENT_ID }}
+  CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    outputs:
+      output1: ${{ steps.commit.outputs.changes_detected }}
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Import GPG key so that we can sign the commit
+      - name: Import GPG key
+        id: import_gpg
+        uses: crazy-max/ghaction-import-gpg@v4
+        with:
+          gpg_private_key: ${{ secrets.GPGKEY }}
+          passphrase: ${{ secrets.GPGPASSPHRASE }}
+          git_user_signingkey: true
+          git_commit_gpgsign: true
+          git_config_global: true
+          git_tag_gpgsign: true
+          git_push_gpgsign: false
+          git_committer_name: ${{ secrets.COMMIT_NAME }}
+          git_committer_email: ${{ secrets.COMMIT_EMAIL }}
+
+      # Install IntuneCD
+      # https://github.com/almenscorner/IntuneCD
+      - name: Install IntuneCD
+        id: install
+        shell: bash
+        run: |
+          pip3 install IntuneCD
+
+      # Backup the latest configuration, using the current directory - $GITHUB_WORKSPACE
+      - name: Backup Intune configuration
+        id: backup
+        shell: bash
+        run: |
+          IntuneCD-startbackup -m 1 -o yaml -p "$GITHUB_WORKSPACE/prod-backup"
+
+      - name: Get date
+        shell: bash
+        id: get-date
+        run: |
+          DATEF=`date +%Y.%m.%d`
+          echo "::set-output name=date::$DATEF"
+
+      - name: Commit changes
+        id: commit
+        uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: "Intune backup ${{steps.get-date.outputs.date}}"
+          commit_user_name: ${{ secrets.COMMIT_NAME }}
+          commit_user_email: ${{ secrets.COMMIT_EMAIL }}
+          #tagging_message: 'v1.0.${{ github.run_number }}'
+
+      - name: "Run if changes have been detected"
+        if: steps.commit.outputs.changes_detected == 'true'
+        run: echo "Changes committed."
+
+      - name: "Run if no changes have been detected"
+        if: steps.commit.outputs.changes_detected == 'false'
+        run: echo "No changes detected."
+
+  document:
+    needs: backup
+    if: needs.backup.outputs.output1 == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      output1: ${{ steps.commit.outputs.changes_detected }}
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull
+        shell: bash
+        run: |
+          git pull origin
+
+      # Import GPG key so that we can sign the commit
+      - name: Import GPG key
+        id: import_gpg
+        uses: crazy-max/ghaction-import-gpg@v4
+        with:
+          gpg_private_key: ${{ secrets.GPGKEY }}
+          passphrase: ${{ secrets.GPGPASSPHRASE }}
+          git_user_signingkey: true
+          git_commit_gpgsign: true
+          git_config_global: true
+          git_tag_gpgsign: true
+          git_push_gpgsign: false
+          git_committer_name: ${{ secrets.COMMIT_NAME }}
+          git_committer_email: ${{ secrets.COMMIT_EMAIL }}
+
+      # Install IntuneCD
+      # https://github.com/almenscorner/IntuneCD
+      - name: Install IntuneCD
+        shell: bash
+        run: |
+          pip3 install IntuneCD
+
+      # Create markdown documentation
+      - name: Generate markdown document
+        shell: bash
+        run: |
+          IntuneCD-startdocumentation -p "$GITHUB_WORKSPACE/prod-backup" -o "$GITHUB_WORKSPACE/prod-as-built.md" -t $TENANT_NAME -i 'Generated documentation'
+
+      - name: Get date
+        shell: bash
+        id: get-date
+        run: |
+          DATEF=`date +%Y.%m.%d`
+          echo "::set-output name=date::$DATEF"
+
+      - name: Commit changes
+        id: commit
+        uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: "Intune documentation ${{steps.get-date.outputs.date}}"
+          commit_user_name: ${{ secrets.COMMIT_NAME }}
+          commit_user_email: ${{ secrets.COMMIT_EMAIL }}
+          #tagging_message: 'v1.0.${{ github.run_number }}'
+
+      - name: "Run if changes have been detected"
+        if: steps.commit.outputs.changes_detected == 'true'
+        run: echo "Changes committed."
+
+      - name: "Run if no changes have been detected"
+        if: steps.commit.outputs.changes_detected == 'false'
+        run: echo "No changes detected."
+
+  tag:
+    needs: document
+    if: needs.document.outputs.output1 == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          token: ${{ secrets.PAT }}
+
+      - name: Pull
+        shell: bash
+        run: |
+          git pull origin
+
+      # Import GPG key so that we can sign the commit
+      - name: Import GPG key
+        id: import_gpg
+        uses: crazy-max/ghaction-import-gpg@v4
+        with:
+          gpg_private_key: ${{ secrets.GPGKEY }}
+          passphrase: ${{ secrets.GPGPASSPHRASE }}
+          git_user_signingkey: true
+          git_commit_gpgsign: true
+          git_config_global: true
+          git_tag_gpgsign: true
+          git_push_gpgsign: false
+          git_committer_name: ${{ secrets.COMMIT_NAME }}
+          git_committer_email: ${{ secrets.COMMIT_EMAIL }}
+
+      # Push tag
+      - name: Push tag
+        shell: bash
+        run: |
+          DATEF=`date +%Y.%m.%d`
+          git tag -a "v$DATEF" -m "Intune documentation $DATEF"
+          git push origin "v$DATEF"

@@ -11,9 +11,6 @@ on:
       - '.github/workflows/intune-backup.yml'
     tags-ignore:
       - '*'
-  schedule:
-    # Run the Intune configuration backup every day at 1am
-    - cron:  '0 1 * * *'
 
 # Add variables to the repo as secrets
 env:
@@ -32,21 +29,6 @@ jobs:
       - uses: actions/checkout@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-
-      # Import GPG key so that we can sign the commit
-      - name: Import GPG key
-        id: import_gpg
-        uses: crazy-max/ghaction-import-gpg@v4
-        with:
-          gpg_private_key: ${{ secrets.GPGKEY }}
-          passphrase: ${{ secrets.GPGPASSPHRASE }}
-          git_user_signingkey: true
-          git_commit_gpgsign: true
-          git_config_global: true
-          git_tag_gpgsign: true
-          git_push_gpgsign: false
-          git_committer_name: ${{ secrets.COMMIT_NAME }}
-          git_committer_email: ${{ secrets.COMMIT_EMAIL }}
 
       # Install IntuneCD
       # https://github.com/almenscorner/IntuneCD
@@ -104,21 +86,6 @@ jobs:
         run: |
           git pull origin
 
-      # Import GPG key so that we can sign the commit
-      - name: Import GPG key
-        id: import_gpg
-        uses: crazy-max/ghaction-import-gpg@v4
-        with:
-          gpg_private_key: ${{ secrets.GPGKEY }}
-          passphrase: ${{ secrets.GPGPASSPHRASE }}
-          git_user_signingkey: true
-          git_commit_gpgsign: true
-          git_config_global: true
-          git_tag_gpgsign: true
-          git_push_gpgsign: false
-          git_committer_name: ${{ secrets.COMMIT_NAME }}
-          git_committer_email: ${{ secrets.COMMIT_EMAIL }}
-
       # Install IntuneCD
       # https://github.com/almenscorner/IntuneCD
       - name: Install IntuneCD
@@ -169,21 +136,6 @@ jobs:
         shell: bash
         run: |
           git pull origin
-
-      # Import GPG key so that we can sign the commit
-      - name: Import GPG key
-        id: import_gpg
-        uses: crazy-max/ghaction-import-gpg@v4
-        with:
-          gpg_private_key: ${{ secrets.GPGKEY }}
-          passphrase: ${{ secrets.GPGPASSPHRASE }}
-          git_user_signingkey: true
-          git_commit_gpgsign: true
-          git_config_global: true
-          git_tag_gpgsign: true
-          git_push_gpgsign: false
-          git_committer_name: ${{ secrets.COMMIT_NAME }}
-          git_committer_email: ${{ secrets.COMMIT_EMAIL }}
 
       # Push tag
       - name: Push tag
